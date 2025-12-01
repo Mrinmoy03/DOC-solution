@@ -76,6 +76,7 @@ export const DocumentEditor = ({ file, onClose, onSave, createNew }: DocumentEdi
     extensions: [
       StarterKit.configure({
         link: false, // Exclude default Link extension
+        underline: false, // Exclude default Underline if present
       }),
       TextStyle,
       FontFamily.configure({
@@ -436,12 +437,11 @@ export const DocumentEditor = ({ file, onClose, onSave, createNew }: DocumentEdi
         onMenuAction={handleMenuAction}
         editor={editor}
       />
-      
       <div className="flex-1 flex overflow-hidden relative">
         <div className="flex-1 flex flex-col min-w-0 relative">
           <EditorToolbar />
           
-          <div className="flex-1 flex overflow-y-auto custom-scrollbar relative bg-[#F9FBFD]">
+          <div className="flex-1 flex overflow-y-auto no-scrollbar relative bg-[#F9FBFD]">
             {ruler.showRuler && (
               <div className="flex-shrink-0 min-h-full">
                 <VerticalRuler />
