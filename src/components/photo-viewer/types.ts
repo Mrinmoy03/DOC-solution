@@ -1,6 +1,7 @@
 export interface PhotoViewerProps {
     file: File | null;
     onClose: () => void;
+    onSave?: (file: File) => void;
 }
 
 export interface FilterState {

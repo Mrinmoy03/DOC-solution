@@ -23,12 +23,7 @@ export const TextToSpeech = ({ text, onClose }: TextToSpeechProps) => {
 
     const handlePlay = () => {
         if (speaking) {
-            // If already speaking, maybe we want to resume? 
-            // react-speech-kit's speak function cancels current speech if called again usually, 
-            // but let's just use it to start.
-            // Actually, if it's paused, we should resume. But react-speech-kit might not expose paused state easily in all versions.
-            // Let's just assume 'speak' starts it.
-            // If we want pause/resume, we need to track state.
+           
         }
 
         speak({

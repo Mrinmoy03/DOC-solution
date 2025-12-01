@@ -12,7 +12,7 @@ import { SaveModal } from './photo-viewer/SaveModal';
 import { PRESET_CATEGORIES } from './photo-viewer/constants';
 import type { PhotoViewerProps, BackgroundState, ResizeDimensions } from './photo-viewer/types';
 
-export const PhotoViewer = ({ file, onClose }: PhotoViewerProps) => {
+export const PhotoViewer = ({ file, onClose, onSave }: PhotoViewerProps) => {
   const [imageUrl, setImageUrl] = useState<string>('');
   const [crop, setCrop] = useState<Crop>();
   const [completedCrop, setCompletedCrop] = useState<PixelCrop>();
@@ -444,13 +444,19 @@ export const PhotoViewer = ({ file, onClose }: PhotoViewerProps) => {
           }
         }
 
-        const link = document.createElement('a');
-        link.download = `${filename}.${saveFormat}`;
-        link.href = URL.createObjectURL(finalBlob);
-        link.click();
+        if (onSave) {
+            const file = new File([finalBlob], `${filename}.${saveFormat}`, { type: mimeType });
+            onSave(file);
+            onClose();
+        } else {
+            const link = document.createElement('a');
+            link.download = `${filename}.${saveFormat}`;
+            link.href = URL.createObjectURL(finalBlob);
+            link.click();
 
-        setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-        setShowSaveModal(false);
+            setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+            setShowSaveModal(false);
+        }
 
       }, mimeType, 0.9);
     }

@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
     Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, AlignJustify,
     List, ListOrdered, Image as ImageIcon, Link as LinkIcon, Minus, Plus,
     Undo, Redo, Printer, PaintBucket, Type, Highlighter, CheckSquare,
-    RemoveFormatting, ChevronDown, Strikethrough, Superscript, Subscript
+    RemoveFormatting, ChevronDown, Strikethrough, Superscript, Subscript, Check
 } from 'lucide-react';
 import { useEditorStore } from '../../store/editorStore';
 import { InsertImageModal } from '../modals/InsertImageModal';
@@ -17,8 +17,61 @@ export const EditorToolbar = () => {
     const [showStyleMenu, setShowStyleMenu] = useState(false);
     const [showTextColor, setShowTextColor] = useState(false);
     const [showHighlight, setShowHighlight] = useState(false);
+    const [showFontMenu, setShowFontMenu] = useState(false);
+    const [selectedLinkText, setSelectedLinkText] = useState('');
+
+    const fonts = [
+        'Arial',
+        'Amatic SC',
+        'Caveat',
+        'Comfortaa',
+        'Comic Sans MS',
+        'Courier New',
+        'EB Garamond',
+        'Georgia',
+        'Impact',
+        'Lexend',
+        'Lobster',
+        'Lora',
+        'Merriweather',
+        'Montserrat',
+        'Nunito',
+        'Oswald',
+        'Times New Roman',
+        'Verdana',
+    ];
+
+    const [showFontSizeMenu, setShowFontSizeMenu] = useState(false);
+
+    const fontSizes = Array.from({ length: 92 }, (_, i) => i + 5); // 5 to 96
 
     const editor = activeEditor;
+
+    // Close font menu when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            const target = event.target as HTMLElement;
+            if (!target.closest('.font-menu-container')) {
+                setShowFontMenu(false);
+            }
+            if (!target.closest('.font-size-menu-container')) {
+                setShowFontSizeMenu(false);
+            }
+        };
+
+        if (showFontMenu || showFontSizeMenu) {
+            document.addEventListener('mousedown', handleClickOutside);
+            return () => document.removeEventListener('mousedown', handleClickOutside);
+        }
+    }, [showFontMenu, showFontSizeMenu]);
+
+    // Close font/font size menus when other menus open
+    useEffect(() => {
+        if (showZoomMenu || showStyleMenu || showTextColor || showHighlight) {
+            setShowFontMenu(false);
+            setShowFontSizeMenu(false);
+        }
+    }, [showZoomMenu, showStyleMenu, showTextColor, showHighlight]);
 
     if (!editor) return (
         <div className="bg-[#edf2fa] px-4 py-1.5 flex items-center gap-1.5 border-b border-gray-300 flex-wrap sticky top-0 z-20 rounded-t-2xl mx-4 mt-2 opacity-50 pointer-events-none">
@@ -51,11 +104,28 @@ export const EditorToolbar = () => {
     };
 
     const handleInsertLink = (url: string, text?: string) => {
-        if (text) {
-            editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
-        } else {
-            editor.chain().focus().setLink({ href: url }).run();
+        let finalUrl = url;
+        if (!/^https?:\/\//i.test(url)) {
+            finalUrl = 'https://' + url;
         }
+
+        if (text) {
+            if (editor.state.selection.empty) {
+                editor.chain().focus().insertContent(`<a href="${finalUrl}">${text}</a>`).run();
+            } else {
+                const { from, to } = editor.state.selection;
+                const selectedText = editor.state.doc.textBetween(from, to, ' ');
+                editor.chain().focus().extendMarkRange('link').setLink({ href: finalUrl }).run();
+                if (selectedText && text !== selectedText) {
+                    editor.chain().focus().insertContent(`<a href="${finalUrl}">${text}</a>`).run();
+                } else {
+                    editor.chain().focus().extendMarkRange('link').setLink({ href: finalUrl }).run();
+                }
+            }
+        } else {
+            editor.chain().focus().setLink({ href: finalUrl }).run();
+        }
+        setShowLinkModal(false);
     };
 
     const setStyle = (style: string, level?: number) => {
@@ -77,6 +147,15 @@ export const EditorToolbar = () => {
         setShowHighlight(false);
     };
 
+    const setFont = (font: string) => {
+        editor.chain().focus().setFontFamily(font).run();
+        setShowFontMenu(false);
+    };
+
+    const getCurrentFont = () => {
+        return editor.getAttributes('textStyle').fontFamily || 'Arial';
+    };
+
     const getCurrentStyleName = () => {
         if (editor.isActive('heading', { level: 1 })) return 'Heading 1';
         if (editor.isActive('heading', { level: 2 })) return 'Heading 2';
@@ -89,7 +168,7 @@ export const EditorToolbar = () => {
     };
 
     return (
-        <div className="bg-[#edf2fa] px-4 py-1.5 flex items-center gap-1.5 border-b border-gray-300 flex-wrap sticky top-0 z-20 rounded-t-2xl mx-4 mt-2">
+        <div className="bg-[#edf2fa] px-4 py-1.5 flex items-center gap-1.5 border-b border-gray-300 flex-wrap sticky top-0 z-40 rounded-t-2xl mx-4 mt-2">
             <div className="flex items-center gap-0.5 border-r border-gray-300 pr-2 mr-1">
                 <ToolbarButton onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()} title="Undo (Ctrl+Z)">
                     <Undo size={16} />
@@ -99,9 +178,6 @@ export const EditorToolbar = () => {
                 </ToolbarButton>
                 <ToolbarButton onClick={() => window.print()} title="Print (Ctrl+P)">
                     <Printer size={16} />
-                </ToolbarButton>
-                <ToolbarButton title="Paint format">
-                    <PaintBucket size={16} />
                 </ToolbarButton>
             </div>
 
@@ -148,35 +224,103 @@ export const EditorToolbar = () => {
             </div>
 
             <div className="flex items-center gap-0.5 border-r border-gray-300 pr-2 mr-1">
-                <div className="flex items-center border border-gray-300 rounded bg-white h-7 px-2">
-                    <span className="text-sm w-16 truncate">Arial</span>
-                    <ChevronDown size={12} className="ml-1 text-gray-500" />
+                <div className="relative font-menu-container">
+                    <button
+                        className="flex items-center border border-gray-300 rounded bg-white h-7 px-2 hover:bg-gray-50 min-w-[120px] justify-between"
+                        onClick={() => setShowFontMenu(!showFontMenu)}
+                    >
+                        <span className="text-sm truncate max-w-[100px]">{getCurrentFont()}</span>
+                        <ChevronDown size={12} className="ml-1 text-gray-500" />
+                    </button>
+                    {showFontMenu && (
+                        <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded shadow-lg z-50 w-48 py-1 max-h-60 overflow-y-auto">
+                            {fonts.map((font) => (
+                                <div
+                                    key={font}
+                                    className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm flex items-center justify-between"
+                                    style={{ fontFamily: font }}
+                                    onMouseDown={(e) => e.preventDefault()}
+                                    onClick={() => setFont(font)}
+                                >
+                                    <span>{font}</span>
+                                    {getCurrentFont() === font && <Check size={14} className="text-blue-600" />}
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
                 <div className="flex items-center border border-gray-300 rounded bg-white h-7">
                     <button
                         className="px-1.5 hover:bg-gray-100 border-r border-gray-300 h-full flex items-center justify-center"
                         onMouseDown={(e) => e.preventDefault()}
                         onClick={() => {
-                            console.log('Decreasing font size');
-                            const currentSize = parseInt(editor.getAttributes('textStyle').fontSize) || 16;
+                            let currentSize = parseInt(editor.getAttributes('textStyle').fontSize);
+                            if (!currentSize) {
+                                if (editor.isActive('heading', { level: 1 })) currentSize = 40;
+                                else if (editor.isActive('heading', { level: 2 })) currentSize = 36;
+                                else if (editor.isActive('heading', { level: 3 })) currentSize = 32;
+                                else if (editor.isActive('heading', { level: 4 })) currentSize = 28;
+                                else if (editor.isActive('heading', { level: 5 })) currentSize = 24;
+                                else if (editor.isActive('heading', { level: 6 })) currentSize = 20;
+                                else currentSize = 16;
+                            }
                             const newSize = Math.max(1, currentSize - 1);
                             editor.chain().focus().setDocumentFontSize(`${newSize}px`).run();
                         }}
                     >
                         <Minus size={12} />
                     </button>
-                    <input
-                        type="text"
-                        value={parseInt(editor.getAttributes('textStyle').fontSize) || 16}
-                        className="w-8 text-center text-sm outline-none h-full"
-                        readOnly
-                    />
+                    <div className="relative font-size-menu-container">
+                        <input
+                            type="text"
+                            value={(() => {
+                                const size = parseInt(editor.getAttributes('textStyle').fontSize);
+                                if (size) return size;
+                                if (editor.isActive('heading', { level: 1 })) return 40;
+                                if (editor.isActive('heading', { level: 2 })) return 36;
+                                if (editor.isActive('heading', { level: 3 })) return 32;
+                                if (editor.isActive('heading', { level: 4 })) return 28;
+                                if (editor.isActive('heading', { level: 5 })) return 24;
+                                if (editor.isActive('heading', { level: 6 })) return 20;
+                                return 16;
+                            })()}
+                            className="w-10 text-center text-sm outline-none h-full cursor-text hover:bg-gray-50"
+                            onClick={() => setShowFontSizeMenu(!showFontSizeMenu)}
+                            readOnly
+                        />
+                         {showFontSizeMenu && (
+                            <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded shadow-lg z-50 w-16 py-1 max-h-60 overflow-y-auto">
+                                {fontSizes.map((size) => (
+                                    <div
+                                        key={size}
+                                        className="px-2 py-1 hover:bg-gray-100 cursor-pointer text-sm text-center"
+                                        onMouseDown={(e) => e.preventDefault()}
+                                        onClick={() => {
+                                            editor.chain().focus().setDocumentFontSize(`${size}px`).run();
+                                            setShowFontSizeMenu(false);
+                                        }}
+                                    >
+                                        {size}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                     <button
                         className="px-1.5 hover:bg-gray-100 border-l border-gray-300 h-full flex items-center justify-center"
                         onMouseDown={(e) => e.preventDefault()}
                         onClick={() => {
-                            const currentSize = parseInt(editor.getAttributes('textStyle').fontSize) || 16;
-                            const newSize = Math.min(48, currentSize + 1);
+                            let currentSize = parseInt(editor.getAttributes('textStyle').fontSize);
+                            if (!currentSize) {
+                                if (editor.isActive('heading', { level: 1 })) currentSize = 40;
+                                else if (editor.isActive('heading', { level: 2 })) currentSize = 36;
+                                else if (editor.isActive('heading', { level: 3 })) currentSize = 32;
+                                else if (editor.isActive('heading', { level: 4 })) currentSize = 28;
+                                else if (editor.isActive('heading', { level: 5 })) currentSize = 24;
+                                else if (editor.isActive('heading', { level: 6 })) currentSize = 20;
+                                else currentSize = 16;
+                            }
+                            const newSize = Math.min(96, currentSize + 1);
                             editor.chain().focus().setDocumentFontSize(`${newSize}px`).run();
                         }}
                     >
@@ -227,7 +371,12 @@ export const EditorToolbar = () => {
             </div>
 
             <div className="flex items-center gap-0.5 border-r border-gray-300 pr-2 mr-1">
-                <ToolbarButton onClick={() => setShowLinkModal(true)} isActive={editor.isActive('link')} title="Insert link">
+                <ToolbarButton onClick={() => {
+                    const { from, to } = editor.state.selection;
+                    const text = editor.state.doc.textBetween(from, to, ' ');
+                    setSelectedLinkText(text);
+                    setShowLinkModal(true);
+                }} isActive={editor.isActive('link')} title="Insert link">
                     <LinkIcon size={16} />
                 </ToolbarButton>
                 <ToolbarButton onClick={() => setShowImageModal(true)} title="Insert image">
@@ -257,14 +406,8 @@ export const EditorToolbar = () => {
                 <ToolbarButton onClick={() => editor.chain().focus().toggleOrderedList().run()} isActive={editor.isActive('orderedList')} title="Numbered list">
                     <ListOrdered size={16} />
                 </ToolbarButton>
-                <ToolbarButton title="Checklist">
+                <ToolbarButton onClick={() => editor.chain().focus().toggleTaskList().run()} isActive={editor.isActive('taskList')} title="Checklist">
                     <CheckSquare size={16} />
-                </ToolbarButton>
-            </div>
-
-            <div className="flex items-center gap-0.5">
-                <ToolbarButton onClick={() => editor.chain().focus().unsetAllMarks().run()} title="Clear formatting">
-                    <RemoveFormatting size={16} />
                 </ToolbarButton>
             </div>
 
@@ -278,6 +421,7 @@ export const EditorToolbar = () => {
                 <InsertLinkModal
                     onClose={() => setShowLinkModal(false)}
                     onInsert={handleInsertLink}
+                    selectedText={selectedLinkText}
                 />
             )}
         </div>

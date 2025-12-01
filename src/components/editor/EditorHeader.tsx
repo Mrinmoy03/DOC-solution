@@ -4,15 +4,16 @@ import { ChevronRight, Check } from 'lucide-react';
 
 interface EditorHeaderProps {
     fileName: string;
+    setFileName: (name: string) => void;
     onClose: () => void;
     onSave?: () => void;
     onMenuAction?: (action: string) => void;
     editor: Editor | null;
 }
 
-type MenuType = 'file' | 'edit' | 'view' | 'insert' | 'format' | 'tools' | null;
+type MenuType = 'file' | 'edit' | 'view' | 'insert' | 'format' | null;
 
-export const EditorHeader = ({ fileName, onClose, onSave, onMenuAction, editor }: EditorHeaderProps) => {
+export const EditorHeader = ({ fileName, setFileName, onClose, onSave, onMenuAction, editor }: EditorHeaderProps) => {
     const [activeMenu, setActiveMenu] = useState<MenuType>(null);
     const [activeSubMenu, setActiveSubMenu] = useState<string | null>(null);
     const menuRef = useRef<HTMLDivElement>(null);
@@ -83,7 +84,8 @@ export const EditorHeader = ({ fileName, onClose, onSave, onMenuAction, editor }
                 <div>
                     <input
                         type="text"
-                        defaultValue={fileName}
+                        value={fileName}
+                        onChange={(e) => setFileName(e.target.value)}
                         className="text-base font-medium text-gray-800 hover:border-gray-300 border border-transparent px-1 rounded focus:border-[#4285F4] focus:ring-1 focus:ring-[#4285F4] outline-none h-6 w-48"
                     />
                     <div className="flex items-center gap-1 text-sm text-gray-700 relative mt-0.5" ref={menuRef}>
@@ -265,22 +267,19 @@ export const EditorHeader = ({ fileName, onClose, onSave, onMenuAction, editor }
                                         </SubMenu>
                                     )}
 
+                                    <MenuDivider />
+                                    <MenuItem onClick={() => { editor?.chain().focus().toggleBulletList().run(); setActiveMenu(null); }} checked={editor?.isActive('bulletList')}>Bulleted list</MenuItem>
+                                    <MenuItem onClick={() => { editor?.chain().focus().toggleOrderedList().run(); setActiveMenu(null); }} checked={editor?.isActive('orderedList')}>Numbered list</MenuItem>
+                                    <MenuItem onClick={() => { editor?.chain().focus().toggleTaskList().run(); setActiveMenu(null); }} checked={editor?.isActive('taskList')}>Checklist</MenuItem>
+
+                                    <MenuDivider />
                                     <MenuItem onClick={() => handleAction('headerFooter')}>Headers & footers</MenuItem>
                                     <MenuItem onClick={() => handleAction('pageNumber')}>Page numbers</MenuItem>
                                 </DropdownMenu>
                             )}
                         </div>
 
-                        {/* Tools Menu */}
-                        <div className="relative">
-                            <MenuButton label="Tools" active={activeMenu === 'tools'} onClick={() => toggleMenu('tools')} />
-                            {activeMenu === 'tools' && (
-                                <DropdownMenu>
-                                    <MenuItem onClick={() => handleAction('wordCount')}>Word count</MenuItem>
-                                    <MenuItem onClick={() => handleAction('spellCheck')}>Spell check</MenuItem>
-                                </DropdownMenu>
-                            )}
-                        </div>
+
                     </div>
                 </div>
             </div>
