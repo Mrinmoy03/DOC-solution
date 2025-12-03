@@ -22,7 +22,8 @@ export const ImageToolbar = ({
 
     const positions = [
         { value: 'inline', label: 'Inline with text', icon: '📄' },
-        { value: 'wrap', label: 'Wrap text', icon: '📝' },
+        { value: 'wrap-left', label: 'Wrap text right', icon: '◀️' },
+        { value: 'wrap-right', label: 'Wrap text left', icon: '▶️' },
         { value: 'break', label: 'Break text', icon: '📋' },
         { value: 'behind', label: 'Behind text', icon: '⬇️' },
         { value: 'front', label: 'In front of text', icon: '⬆️' },
