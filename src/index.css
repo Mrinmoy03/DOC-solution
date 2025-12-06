@@ -101,38 +101,45 @@ select:-moz-autofill {
 }
 
 /* Image Positioning */
-img.image-inline {
+img.image-inline,
+.image-node-view.image-inline {
   display: inline-block;
   vertical-align: baseline;
   margin: 0 0.25rem;
 }
 
-img.image-wrap-left {
+img.image-wrap-left,
+.image-node-view.image-wrap-left {
   float: left;
   margin: 0 1rem 1rem 0;
   max-width: 50%;
 }
 
-img.image-wrap-right {
+img.image-wrap-right,
+.image-node-view.image-wrap-right {
   float: right;
   margin: 0 0 1rem 1rem;
   max-width: 50%;
 }
 
-img.image-break {
+img.image-break,
+.image-node-view.image-break {
   display: block;
   margin: 1rem auto;
   clear: both;
 }
 
 /* Positioned images - behind and in front of text */
-img.image-behind {
+img.image-behind,
+.image-node-view.image-behind {
   position: absolute !important;
   z-index: -1;
+  /* Lower z-index for behind */
   cursor: move;
 }
 
-img.image-front {
+img.image-front,
+.image-node-view.image-front {
   position: absolute !important;
   z-index: 999;
   cursor: move;
@@ -267,4 +274,126 @@ img.image-front {
   width: 1rem;
   height: 1rem;
   margin-top: 0.25rem;
+}
+
+/* Alphabetical List Styles */
+.ProseMirror ol.alphabetical-list {
+  list-style-type: lower-alpha;
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+}
+
+.ProseMirror ol.alphabetical-list li {
+  margin: 0.25rem 0;
+}
+
+/* Roman List Styles */
+.ProseMirror ol.roman-list {
+  list-style-type: lower-roman;
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+}
+
+.ProseMirror ol.roman-list li {
+  margin: 0.25rem 0;
+}
+
+/* Shape Node Styles */
+.ProseMirror .shape-node {
+  position: relative;
+  display: inline-block;
+  cursor: move;
+  user-select: none;
+}
+
+.ProseMirror .shape-node.selected {
+  outline: 2px solid #4285F4;
+  outline-offset: 2px;
+}
+
+.ProseMirror .shape-node svg {
+  display: block;
+}
+
+/* TextBox Node Styles */
+.ProseMirror .textbox-node {
+  position: relative;
+  display: inline-block;
+  cursor: move;
+  border: 1px solid #ccc;
+  padding: 10px;
+  background: white;
+  min-width: 100px;
+  min-height: 50px;
+}
+
+.ProseMirror .textbox-node.selected {
+  outline: 2px solid #4285F4;
+  outline-offset: 2px;
+}
+
+.ProseMirror .textbox-node.watermark {
+  opacity: 0.3;
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.ProseMirror .textbox-node.shadow {
+  box-shadow: 4px 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.ProseMirror .textbox-node.reflection::after {
+  content: '';
+  position: absolute;
+  bottom: -100%;
+  left: 0;
+  right: 0;
+  height: 100%;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.3), transparent);
+  transform: scaleY(-1);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.ProseMirror .textbox-node.three-d .textbox-content {
+  text-shadow:
+    1px 1px 0 #ccc,
+    2px 2px 0 #bbb,
+    3px 3px 0 #aaa,
+    4px 4px 0 #999,
+    5px 5px 0 #888;
+}
+
+/* Draggable Toolbar Styles */
+.draggable-toolbar {
+  position: absolute;
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  padding: 8px;
+  z-index: 1000;
+  cursor: move;
+  user-select: none;
+}
+
+.draggable-toolbar.dragging {
+  opacity: 0.8;
+  cursor: grabbing;
+}
+
+.draggable-toolbar-handle {
+  cursor: grab;
+  padding: 4px;
+  background: #f0f0f0;
+  border-radius: 2px;
+  margin-bottom: 4px;
+  text-align: center;
+  font-size: 10px;
+  color: #666;
+}
+
+.draggable-toolbar-handle:active {
+  cursor: grabbing;
 }

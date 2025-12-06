@@ -76,7 +76,7 @@ export const EditorRuler = () => {
 
             if (isInch && i > 0 && i < width) {
                 ticks.push(
-                    <div key={`num-${i}`} className="absolute bottom-4 text-[10px] text-gray-500 transform -translate-x-1/2" style={{ left: i }}>
+                    <div key={`num-${i}`} className="absolute bottom-0 text-xs text-gray-600 font-medium transform -translate-x-1/2" style={{ left: i }}>
                         {i / 96}
                     </div>
                 );

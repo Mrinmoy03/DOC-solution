@@ -44,12 +44,18 @@ import { LineSpacing } from '../extensions/LineSpacing';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import { ImageExtension } from '../extensions/ImageExtension';
-import { ImageToolbar } from './editor/ImageToolbar';
+// import { ImageToolbar } from './editor/ImageToolbar';
 import { PhotoViewer } from './PhotoViewer';
 import { ImageCropModal } from './modals/ImageCropModal';
 import { ReplaceImageModal } from './modals/ReplaceImageModal';
-import { ImageResizeOverlay } from './editor/ImageResizeOverlay';
-import { ImageDragOverlay } from './editor/ImageDragOverlay';
+// import { ImageResizeOverlay } from './editor/ImageResizeOverlay';
+// import { ImageDragOverlay } from './editor/ImageDragOverlay';
+import { FloatingImageToolbar } from './editor/FloatingImageToolbar';
+import { AlphabeticalList } from '../extensions/AlphabeticalList';
+import { RomanList } from '../extensions/RomanList';
+import { TextBox } from '../extensions/TextBox';
+import { TextBoxToolbar } from './editor/TextBoxToolbar';
+import { TableToolbar } from './editor/TableToolbar';
 
 interface DocumentEditorProps {
   file: File | null;
@@ -62,15 +68,22 @@ interface DocumentEditorProps {
 export const DocumentEditor = ({ file, onClose, onSave, createNew }: DocumentEditorProps) => {
   const [fileName, setFileName] = useState(file?.name || 'Untitled Document');
   const { ruler, setWordCount, toggleRuler, setPageState, setRulerState } = useEditorStore();
-  const [activeModal, setActiveModal] = useState<'findReplace' | 'pageSetup' | 'insertLink' | 'save' | 'insertTable' | 'newDocument' | 'open' | 'insertImage' | 'headerFooter' | 'pageNumber' | null>(null);
+  const [activeModal, setActiveModal] = useState<'findReplace' | 'pageSetup' | 'insertLink' | 'save' | 'insertTable' | 'newDocument' | 'open' | 'insertImage' | 'headerFooter' | 'pageNumber' | 'insertTextBox' | null>(null);
   const [selectedLinkText, setSelectedLinkText] = useState('');
-  
+
   // Image Editing State
   const [showPhotoViewer, setShowPhotoViewer] = useState(false);
   const [showCropModal, setShowCropModal] = useState(false);
   const [showReplaceModal, setShowReplaceModal] = useState(false);
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
   const [selectedImageNode, setSelectedImageNode] = useState<{ node: Node, pos: number } | null>(null);
+  const [showImageToolbar, setShowImageToolbar] = useState(false);
+
+  // TextBox State
+  const [selectedTextBoxNode, setSelectedTextBoxNode] = useState<{ node: Node, pos: number } | null>(null);
+
+  // Table State
+  const [isInTable, setIsInTable] = useState(false);
 
   const editor = useEditor({
     extensions: [
@@ -97,8 +110,40 @@ export const DocumentEditor = ({ file, onClose, onSave, createNew }: DocumentEdi
         resizable: true,
       }),
       TableRow,
-      TableHeader,
-      TableCell,
+      TableHeader.extend({
+        addAttributes() {
+          return {
+            ...this.parent?.(),
+            style: {
+              default: null,
+              parseHTML: element => element.getAttribute('style'),
+              renderHTML: attributes => {
+                if (!attributes.style) {
+                  return {};
+                }
+                return { style: attributes.style };
+              },
+            },
+          };
+        },
+      }),
+      TableCell.extend({
+        addAttributes() {
+          return {
+            ...this.parent?.(),
+            style: {
+              default: null,
+              parseHTML: element => element.getAttribute('style'),
+              renderHTML: attributes => {
+                if (!attributes.style) {
+                  return {};
+                }
+                return { style: attributes.style };
+              },
+            },
+          };
+        },
+      }),
       CharacterCount,
       SearchAndReplace,
       Link.extend({
@@ -116,6 +161,9 @@ export const DocumentEditor = ({ file, onClose, onSave, createNew }: DocumentEdi
       TaskItem.configure({
         nested: true,
       }),
+      AlphabeticalList,
+      RomanList,
+      TextBox,
     ],
     content: '',
     editorProps: {
@@ -130,11 +178,41 @@ export const DocumentEditor = ({ file, onClose, onSave, createNew }: DocumentEdi
       const { selection } = editor.state;
       // Use type assertion to avoid TS error if types are missing
       const node = (selection as unknown as { node: Node }).node;
+
+      // Check for image nodes
       if (node && node.type.name === 'image') {
         setSelectedImageNode({ node: node, pos: selection.from });
+        // Reset toolbar visibility on new selection (it should only show on double click)
+        setShowImageToolbar(false);
       } else {
         setSelectedImageNode(null);
+        setShowImageToolbar(false);
       }
+
+      // Check for textBox nodes - check both direct selection and parent nodes
+      let textBoxFound = false;
+      if (node && node.type.name === 'textBox') {
+        setSelectedTextBoxNode({ node: node, pos: selection.from });
+        textBoxFound = true;
+      } else {
+        // Check if we're inside a textBox by traversing parent nodes
+        const { $from } = selection;
+        for (let d = $from.depth; d > 0; d--) {
+          const parentNode = $from.node(d);
+          if (parentNode.type.name === 'textBox') {
+            setSelectedTextBoxNode({ node: parentNode, pos: $from.before(d) });
+            textBoxFound = true;
+            break;
+          }
+        }
+      }
+      if (!textBoxFound) {
+        setSelectedTextBoxNode(null);
+      }
+
+      // Check if cursor is in a table
+      const isTable = editor.isActive('table');
+      setIsInTable(isTable);
     },
   });
 
@@ -283,6 +361,9 @@ export const DocumentEditor = ({ file, onClose, onSave, createNew }: DocumentEdi
       case 'insertTable':
         setActiveModal('insertTable');
         break;
+      case 'insertTextBox':
+        editor?.chain().focus().insertTextBox().run();
+        break;
       case 'toggleRuler':
         toggleRuler();
         break;
@@ -340,6 +421,19 @@ export const DocumentEditor = ({ file, onClose, onSave, createNew }: DocumentEdi
     editor?.chain().focus().setImage({ src: url }).run();
   };
 
+  const handleUpdateTextBox = (attrs: Record<string, any>) => {
+    if (!selectedTextBoxNode || !editor) return;
+    editor.chain().setNodeSelection(selectedTextBoxNode.pos).updateAttributes('textBox', attrs).run();
+  };
+
+
+
+
+
+
+
+
+
   const handlePageSetupApply = (settings: { size: string, orientation: 'portrait' | 'landscape', margins: { top: number, bottom: number, left: number, right: number } }) => {
     const dpi = 96;
     let width = 816;
@@ -391,8 +485,8 @@ export const DocumentEditor = ({ file, onClose, onSave, createNew }: DocumentEdi
     if (!selectedImageNode || !editor) return;
     const reader = new FileReader();
     reader.onload = (e) => {
-        const result = e.target?.result as string;
-        editor.chain().focus().setImage({ src: result }).run();
+      const result = e.target?.result as string;
+      editor.chain().focus().setImage({ src: result }).run();
     };
     reader.readAsDataURL(file);
     setShowPhotoViewer(false);
@@ -400,21 +494,36 @@ export const DocumentEditor = ({ file, onClose, onSave, createNew }: DocumentEdi
   };
 
   const handleCrop = (croppedImageUrl: string) => {
-      if (!selectedImageNode || !editor) return;
-      editor.chain().setNodeSelection(selectedImageNode.pos).updateAttributes('image', { src: croppedImageUrl }).run();
-      setShowCropModal(false);
+    if (!selectedImageNode || !editor) return;
+    editor.chain().setNodeSelection(selectedImageNode.pos).updateAttributes('image', { src: croppedImageUrl }).run();
+    setShowCropModal(false);
   };
 
   const handleReplace = (url: string) => {
-      if (!selectedImageNode || !editor) return;
-      editor.chain().setNodeSelection(selectedImageNode.pos).updateAttributes('image', { src: url }).run();
-      setShowReplaceModal(false);
+    if (!selectedImageNode || !editor) return;
+    editor.chain().setNodeSelection(selectedImageNode.pos).updateAttributes('image', { src: url }).run();
+    setShowReplaceModal(false);
   };
 
   const handlePosition = (position: string) => {
-      if (!selectedImageNode || !editor) return;
-      editor.chain().setNodeSelection(selectedImageNode.pos).updateAttributes('image', { position }).run();
+    if (!selectedImageNode || !editor) return;
+    editor.chain().setNodeSelection(selectedImageNode.pos).updateAttributes('image', {
+      position,
+      x: 0,
+      y: 0
+    }).run();
   };
+
+  useEffect(() => {
+    const handleImageDoubleClick = (e: Event) => {
+      // Ensure we have an editor
+      if (editor) {
+        setShowImageToolbar(true);
+      }
+    };
+    window.addEventListener('image-double-click', handleImageDoubleClick);
+    return () => window.removeEventListener('image-double-click', handleImageDoubleClick);
+  }, [editor]);
 
   if (!editor) {
     return (
@@ -440,7 +549,7 @@ export const DocumentEditor = ({ file, onClose, onSave, createNew }: DocumentEdi
       <div className="flex-1 flex overflow-hidden relative">
         <div className="flex-1 flex flex-col min-w-0 relative">
           <EditorToolbar />
-          
+
           <div className="flex-1 flex overflow-y-auto no-scrollbar relative bg-[#F9FBFD]">
             {ruler.showRuler && (
               <div className="flex-shrink-0 min-h-full">
@@ -454,43 +563,33 @@ export const DocumentEditor = ({ file, onClose, onSave, createNew }: DocumentEdi
 
               {selectedImageNode && editor && (
                 <>
-                    <div className="absolute" style={{ 
-                      top: editor.view.coordsAtPos(selectedImageNode.pos).top - 60, 
-                      left: '50%',
-                      transform: 'translateX(-50%)',
-                      zIndex: 50
-                    }}>
-                      <ImageToolbar 
-                        onCrop={() => setShowCropModal(true)}
-                        onResize={() => {}}
-                        onEdit={handleImageEdit}
-                        onPosition={handlePosition}
-                        onReplace={() => setShowReplaceModal(true)}
-                        currentPosition={selectedImageNode.node.attrs.position || 'inline'}
-                      />
-                    </div>
-                    
-                    {/* Resize overlay for all positions except behind/front */}
-                    {selectedImageNode.node.attrs.position !== 'behind' && selectedImageNode.node.attrs.position !== 'front' && (
-                      <ImageResizeOverlay 
-                          editor={editor} 
-                          selectedImageNode={selectedImageNode}
-                          onResizeEnd={() => {}}
-                      />
-                    )}
-                    
-                    {/* Drag overlay for behind/front positioned images */}
-                    {(selectedImageNode.node.attrs.position === 'behind' || selectedImageNode.node.attrs.position === 'front') && (
-                      <ImageDragOverlay 
-                          editor={editor} 
-                          selectedImageNode={selectedImageNode}
-                      />
-                    )}
+                  <div className="absolute" style={{
+                    top: editor.view.coordsAtPos(selectedImageNode.pos).top - 60,
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    zIndex: 50
+                  }}>
+                    {/* This div is replaced by FloatingImageToolbar logic but we keep the structure if needed or just replace content.*/}
+                    {/* Actually we should replace the whole div block with FloatingImageToolbar as it handles its own positioning */}
+                  </div>
+                  {selectedImageNode && showImageToolbar && (
+                    <FloatingImageToolbar
+                      editor={editor}
+                      selectedImageNode={selectedImageNode}
+                      onCrop={() => setShowCropModal(true)}
+                      onResize={() => { }}
+                      onEdit={handleImageEdit}
+                      onPosition={handlePosition}
+                      onReplace={() => setShowReplaceModal(true)}
+                    />
+                  )}
+
+                  {/* Resize overlay and drag overlay handled by ImageNodeView now */}
                 </>
               )}
             </div>
           </div>
-          
+
           <EditorFooter />
         </div>
       </div>
@@ -582,23 +681,39 @@ export const DocumentEditor = ({ file, onClose, onSave, createNew }: DocumentEdi
         )
       }
 
+
       {showCropModal && selectedImageNode && (
-          <ImageCropModal 
-            imageUrl={selectedImageNode.node.attrs.src} 
-            onClose={() => setShowCropModal(false)} 
-            onCrop={handleCrop}
-          />
+        <ImageCropModal
+          imageUrl={selectedImageNode.node.attrs.src}
+          onClose={() => setShowCropModal(false)}
+          onCrop={handleCrop}
+        />
       )}
 
       {showReplaceModal && (
-          <ReplaceImageModal 
-            onClose={() => setShowReplaceModal(false)}
-            onReplace={handleReplace}
-          />
+        <ReplaceImageModal
+          onClose={() => setShowReplaceModal(false)}
+          onReplace={handleReplace}
+        />
       )}
 
       {showPhotoViewer && selectedImageFile && (
         <PhotoViewer file={selectedImageFile} onClose={() => setShowPhotoViewer(false)} onSave={handlePhotoViewerSave} />
+      )}
+
+
+
+      {selectedTextBoxNode && (
+        <TextBoxToolbar
+          onUpdateTextBox={handleUpdateTextBox}
+          textBoxAttrs={selectedTextBoxNode.node.attrs}
+        />
+      )}
+
+      {isInTable && editor && (
+        <TableToolbar
+          editor={editor}
+        />
       )}
     </div>
   );

@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Crop, Maximize2, Edit3, Image as ImageIcon, Replace } from 'lucide-react';
+import { Crop, Edit3, Image as ImageIcon, Replace } from 'lucide-react';
 
 interface ImageToolbarProps {
     onCrop: () => void;
-    onResize: () => void;
+    // onResize: () => void; // Removed
     onEdit: () => void;
     onPosition: (position: string) => void;
     onReplace: () => void;
@@ -12,7 +12,7 @@ interface ImageToolbarProps {
 
 export const ImageToolbar = ({
     onCrop,
-    onResize,
+    // onResize, // Removed
     onEdit,
     onPosition,
     onReplace,
@@ -39,13 +39,7 @@ export const ImageToolbar = ({
                 <Crop size={18} />
             </button>
 
-            <button
-                onClick={onResize}
-                className="p-2 hover:bg-gray-100 rounded transition-colors"
-                title="Resize image"
-            >
-                <Maximize2 size={18} />
-            </button>
+
 
             <button
                 onClick={onEdit}

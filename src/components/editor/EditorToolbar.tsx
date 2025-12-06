@@ -3,7 +3,7 @@ import {
     Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, AlignJustify,
     List, ListOrdered, Image as ImageIcon, Link as LinkIcon, Minus, Plus,
     Undo, Redo, Printer, PaintBucket, Type, Highlighter, CheckSquare,
-    RemoveFormatting, ChevronDown, Strikethrough, Superscript, Subscript, Check
+    ChevronDown, Strikethrough, Superscript, Subscript, Check
 } from 'lucide-react';
 import { useEditorStore } from '../../store/editorStore';
 import { InsertImageModal } from '../modals/InsertImageModal';
@@ -288,7 +288,7 @@ export const EditorToolbar = () => {
                             onClick={() => setShowFontSizeMenu(!showFontSizeMenu)}
                             readOnly
                         />
-                         {showFontSizeMenu && (
+                        {showFontSizeMenu && (
                             <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded shadow-lg z-50 w-16 py-1 max-h-60 overflow-y-auto">
                                 {fontSizes.map((size) => (
                                     <div
@@ -405,6 +405,16 @@ export const EditorToolbar = () => {
                 </ToolbarButton>
                 <ToolbarButton onClick={() => editor.chain().focus().toggleOrderedList().run()} isActive={editor.isActive('orderedList')} title="Numbered list">
                     <ListOrdered size={16} />
+                </ToolbarButton>
+                <ToolbarButton onClick={() => editor.chain().focus().toggleAlphabeticalList().run()} isActive={editor.isActive('alphabeticalList')} title="Alphabetical list (a., b., c., ...)">
+                    <div className="flex items-center text-xs font-semibold">
+                        <span>a.</span>
+                    </div>
+                </ToolbarButton>
+                <ToolbarButton onClick={() => editor.chain().focus().toggleRomanList().run()} isActive={editor.isActive('romanList')} title="Roman list (i., ii., iii., ...)">
+                    <div className="flex items-center text-xs font-semibold">
+                        <span>i.</span>
+                    </div>
                 </ToolbarButton>
                 <ToolbarButton onClick={() => editor.chain().focus().toggleTaskList().run()} isActive={editor.isActive('taskList')} title="Checklist">
                     <CheckSquare size={16} />

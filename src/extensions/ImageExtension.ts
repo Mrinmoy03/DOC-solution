@@ -1,4 +1,7 @@
+import { mergeAttributes } from '@tiptap/core';
 import Image from '@tiptap/extension-image';
+import { ReactNodeViewRenderer } from '@tiptap/react';
+import { ImageNodeView } from '../components/editor/ImageNodeView';
 
 export const ImageExtension = Image.extend({
     addAttributes() {
@@ -10,6 +13,16 @@ export const ImageExtension = Image.extend({
             height: {
                 default: null,
             },
+            x: {
+                default: 0,
+            },
+            y: {
+                default: 0,
+            },
+            rotation: {
+                default: 0,
+            },
+            // Keep existing attributes for backward compatibility or if needed by other parts
             position: {
                 default: 'inline',
                 renderHTML: attributes => {
@@ -19,28 +32,10 @@ export const ImageExtension = Image.extend({
                     };
                 },
             },
-            left: {
-                default: null,
-                renderHTML: attributes => {
-                    if (attributes.left !== null && (attributes.position === 'behind' || attributes.position === 'front')) {
-                        return {
-                            style: `left: ${attributes.left}px;`,
-                        };
-                    }
-                    return {};
-                },
-            },
-            top: {
-                default: null,
-                renderHTML: attributes => {
-                    if (attributes.top !== null && (attributes.position === 'behind' || attributes.position === 'front')) {
-                        return {
-                            style: `top: ${attributes.top}px;`,
-                        };
-                    }
-                    return {};
-                },
-            },
         };
+    },
+
+    addNodeView() {
+        return ReactNodeViewRenderer(ImageNodeView);
     },
 });

@@ -143,6 +143,8 @@ export const EditorHeader = ({ fileName, setFileName, onClose, onSave, onMenuAct
                                     <MenuItem onClick={() => handleAction('insertImage')}>Image</MenuItem>
                                     <MenuItem onClick={() => handleAction('insertTable')}>Table</MenuItem>
                                     <MenuItem onClick={() => handleAction('insertLink')}>Link</MenuItem>
+                                    <MenuDivider />
+                                    <MenuItem onClick={() => handleAction('insertTextBox')}>Text Box</MenuItem>
                                 </DropdownMenu>
                             )}
                         </div>
@@ -270,6 +272,8 @@ export const EditorHeader = ({ fileName, setFileName, onClose, onSave, onMenuAct
                                     <MenuDivider />
                                     <MenuItem onClick={() => { editor?.chain().focus().toggleBulletList().run(); setActiveMenu(null); }} checked={editor?.isActive('bulletList')}>Bulleted list</MenuItem>
                                     <MenuItem onClick={() => { editor?.chain().focus().toggleOrderedList().run(); setActiveMenu(null); }} checked={editor?.isActive('orderedList')}>Numbered list</MenuItem>
+                                    <MenuItem onClick={() => { editor?.chain().focus().toggleAlphabeticalList().run(); setActiveMenu(null); }} checked={editor?.isActive('alphabeticalList')}>Alphabetical list</MenuItem>
+                                    <MenuItem onClick={() => { editor?.chain().focus().toggleRomanList().run(); setActiveMenu(null); }} checked={editor?.isActive('romanList')}>Roman list</MenuItem>
                                     <MenuItem onClick={() => { editor?.chain().focus().toggleTaskList().run(); setActiveMenu(null); }} checked={editor?.isActive('taskList')}>Checklist</MenuItem>
 
                                     <MenuDivider />
