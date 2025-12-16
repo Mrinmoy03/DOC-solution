@@ -13,6 +13,10 @@ export const HeaderFooterModal: React.FC<HeaderFooterModalProps> = ({ isOpen, on
     const [showFooter, setShowFooter] = useState(headerFooter.showFooter);
     const [headerMargin, setHeaderMargin] = useState(headerFooter.headerMargin);
     const [footerMargin, setFooterMargin] = useState(headerFooter.footerMargin);
+    const [headerLineStyle, setHeaderLineStyle] = useState(headerFooter.headerLineStyle || 'none');
+    const [footerLineStyle, setFooterLineStyle] = useState(headerFooter.footerLineStyle || 'none');
+    const [headerLineColor, setHeaderLineColor] = useState(headerFooter.headerLineColor || '#000000');
+    const [footerLineColor, setFooterLineColor] = useState(headerFooter.footerLineColor || '#000000');
 
     useEffect(() => {
         if (isOpen) {
@@ -20,6 +24,10 @@ export const HeaderFooterModal: React.FC<HeaderFooterModalProps> = ({ isOpen, on
             setShowFooter(headerFooter.showFooter);
             setHeaderMargin(headerFooter.headerMargin);
             setFooterMargin(headerFooter.footerMargin);
+            setHeaderLineStyle(headerFooter.headerLineStyle || 'none');
+            setFooterLineStyle(headerFooter.footerLineStyle || 'none');
+            setHeaderLineColor(headerFooter.headerLineColor || '#000000');
+            setFooterLineColor(headerFooter.footerLineColor || '#000000');
         }
     }, [isOpen, headerFooter]);
 
@@ -29,6 +37,10 @@ export const HeaderFooterModal: React.FC<HeaderFooterModalProps> = ({ isOpen, on
             showFooter,
             headerMargin,
             footerMargin,
+            headerLineStyle,
+            footerLineStyle,
+            headerLineColor,
+            footerLineColor,
         });
         onClose();
     };
@@ -95,6 +107,55 @@ export const HeaderFooterModal: React.FC<HeaderFooterModalProps> = ({ isOpen, on
                                     onChange={(e) => setFooterMargin(parseFloat(e.target.value))}
                                     className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:border-[#4285F4] focus:ring-1 focus:ring-[#4285F4] outline-none"
                                 />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4 mt-4">
+                            <div>
+                                <label className="block text-xs text-gray-600 mb-1">Header Line Style</label>
+                                <div className="flex gap-2">
+                                    <select
+                                        value={headerLineStyle}
+                                        onChange={(e) => setHeaderLineStyle(e.target.value)}
+                                        className="flex-1 border border-gray-300 rounded px-2 py-1.5 text-sm focus:border-[#4285F4] focus:ring-1 focus:ring-[#4285F4] outline-none"
+                                    >
+                                        <option value="none">None</option>
+                                        <option value="solid">Solid</option>
+                                        <option value="dashed">Dashed</option>
+                                        <option value="dotted">Dotted</option>
+                                        <option value="double">Double</option>
+                                    </select>
+                                    <input
+                                        type="color"
+                                        value={headerLineColor}
+                                        onChange={(e) => setHeaderLineColor(e.target.value)}
+                                        className="w-8 h-8 p-0 border-0 rounded overflow-hidden cursor-pointer"
+                                        disabled={headerLineStyle === 'none'}
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-xs text-gray-600 mb-1">Footer Line Style</label>
+                                <div className="flex gap-2">
+                                    <select
+                                        value={footerLineStyle}
+                                        onChange={(e) => setFooterLineStyle(e.target.value)}
+                                        className="flex-1 border border-gray-300 rounded px-2 py-1.5 text-sm focus:border-[#4285F4] focus:ring-1 focus:ring-[#4285F4] outline-none"
+                                    >
+                                        <option value="none">None</option>
+                                        <option value="solid">Solid</option>
+                                        <option value="dashed">Dashed</option>
+                                        <option value="dotted">Dotted</option>
+                                        <option value="double">Double</option>
+                                    </select>
+                                    <input
+                                        type="color"
+                                        value={footerLineColor}
+                                        onChange={(e) => setFooterLineColor(e.target.value)}
+                                        className="w-8 h-8 p-0 border-0 rounded overflow-hidden cursor-pointer"
+                                        disabled={footerLineStyle === 'none'}
+                                    />
+                                </div>
                             </div>
                         </div>
                     </div>

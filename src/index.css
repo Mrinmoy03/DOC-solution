@@ -12,6 +12,17 @@ body {
   background-color: #f5f5f5;
 }
 
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none;
+}
+
+html,
+body {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 #root {
   min-height: 100vh;
 }
@@ -66,6 +77,19 @@ select:-moz-autofill {
   scrollbar-width: none;
   /* Firefox */
 }
+
+/* Hide scrollbar while maintaining scroll functionality */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  /* IE and Edge */
+  scrollbar-width: none;
+  /* Firefox */
+}
+
 
 /* Tiptap Table Styles */
 .ProseMirror table {
@@ -396,4 +420,147 @@ img.image-front,
 
 .draggable-toolbar-handle:active {
   cursor: grabbing;
+}
+
+.lint-error {
+  text-decoration: underline wavy red;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+  background-color: rgba(255, 0, 0, 0.1);
+  cursor: context-menu;
+}
+
+.lint-warning {
+  text-decoration: underline wavy orange;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+  cursor: context-menu;
+}
+
+/* =========================================================================
+   SINGLE, DEFINITIVE PRINT LAYOUT (V8)
+   Includes all fixes: Dashboard Hidden (Page 1), Overflow Hidden (Page 4), 99% Scale.
+   ========================================================================= */
+
+@media print {
+  @page {
+    margin: 0;
+    size: auto;
+  }
+
+  /* --- 1. HIDE ALL NON-DOCUMENT UI (Prevents "Default 1st Page") --- */
+  nav,
+  .max-w-7xl,
+  .sticky,
+  .EditorFooter,
+  .vertical-ruler,
+  .draggable-toolbar,
+  .draggable-toolbar-handle,
+  button,
+  .ProseMirror-widget.selection-marker,
+  .mx-auto.relative>div.absolute:not(.editor-page-bg),
+  /* Hide absolute overlays except page BGs */
+  /* Specific Dashboard Elements */
+  [class*="bg-[url"],
+  /* Hide dashboard patterns */
+  div[class*="max-w-7xl"] {
+    display: none !important;
+  }
+
+  /* --- 2. LAYOUT RESET & OVERFLOW FIXED (Prevents "Double Page / 4 Page") --- */
+  body,
+  #root,
+  .fixed,
+  .flex-1 {
+    position: relative !important;
+    overflow: hidden !important;
+    /* Forces cropping of any sub-pixel overflow. CRITICAL FIX. */
+    height: auto !important;
+    width: 100% !important;
+    background: white !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: block !important;
+  }
+
+  /* Reset Dashboard Background Colors */
+  .min-h-screen,
+  .bg-\[\#e4e7ea\],
+  .bg-\[\#F9FBFD\] {
+    background: white !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+  }
+
+  /* Ensure DocumentEditor container flows naturally */
+  .fixed.inset-0.bg-\[\#F9FBFD\].z-50 {
+    position: relative !important;
+    z-index: auto !important;
+    inset: auto !important;
+  }
+
+  /* --- 3. BACKGROUNDS & HEADERS/FOOTERS (Restores Visual Fidelity) --- */
+  .editor-page-bg {
+    display: block !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    background: transparent !important;
+    /* Must be transparent to not block text if Z-index fails */
+    border: none !important;
+    box-shadow: none !important;
+    z-index: -10 !important;
+    /* Place BEHIND text */
+
+    /* 
+       ALIGNMENT FIX:
+       In Editor: Pages have 20px gap.
+       In Print: Pages have 0px gap.
+       We must shift page backgrounds UP by (gap * page index) to match the print flow.
+    */
+    transform: translateY(calc(var(--page-index) * -20px)) !important;
+  }
+
+  /* --- 4. CONTENT FLOW & SCALING (Prevents Overflow) --- */
+  .relative.z-10.pointer-events-none {
+    /* Allow native padding to render (User requirement: "Proper Margins") */
+    width: 100% !important;
+
+    /* SAFETY SCALE: 99%
+       Prevents "100.01% height" issue where a full page triggers a new blank page.
+       This is the standard fix for HTML-to-Print overflow bugs.
+    */
+    transform: scale(0.99) !important;
+    transform-origin: top center !important;
+  }
+
+  .ProseMirror {
+    position: static !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* --- 5. PAGINATION WIDGETS --- */
+  .print-page-break-container {
+    display: block !important;
+    break-before: page;
+    page-break-before: always;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    height: auto !important;
+    /* Must be auto to allow spacer to push content down */
+  }
+
+  .print-page-break-filler {
+    display: none !important;
+    /* Hide visual filler */
+  }
+
+  .print-page-break-spacer {
+    display: block !important;
+    /* spacerHeight provides top margin for next page */
+  }
 }

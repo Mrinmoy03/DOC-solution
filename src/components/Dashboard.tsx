@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { DocumentViewer } from './DocumentViewer';
 import { DocumentEditor } from './DocumentEditor';
-import { PhotoViewer } from './PhotoViewer';
+import { PhotoViewer } from '../lib/components';
 import gsap from 'gsap';
 
 export const Dashboard = () => {
