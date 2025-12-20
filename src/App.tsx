@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Login } from './components/Login';
 import { Dashboard } from './components/Dashboard';
 import Registration from './components/Registration';
+import { CollageEditor } from './components/collage/CollageEditor';
 
 const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated } = useAuth();
@@ -14,13 +15,21 @@ const AppRoutes = () => {
   const { isAuthenticated } = useAuth();
   return (
     <Routes>
-    <Route path="/login" element={isAuthenticated ? <Navigate to="/" /> : <Login />} />
-    <Route path="/register" element={<Registration />} />
+      <Route path="/login" element={isAuthenticated ? <Navigate to="/" /> : <Login />} />
+      <Route path="/register" element={<Registration />} />
       <Route
         path="/"
         element={
           <PrivateRoute>
             <Dashboard />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/collage"
+        element={
+          <PrivateRoute>
+            <CollageEditor />
           </PrivateRoute>
         }
       />
