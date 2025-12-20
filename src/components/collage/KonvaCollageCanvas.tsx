@@ -1,0 +1,482 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { Stage, Layer, Rect } from 'react-konva';
+import type { CollageTemplate, CollageStyle } from '../../types/collage';
+import type { GridCell, CellImage } from '../../types/crop';
+import { CollageCell } from './CollageCell.tsx';
+import { ImageCropper } from './ImageCropper.tsx';
+
+interface KonvaCollageCanvasProps {
+    template: CollageTemplate;
+    style: CollageStyle;
+    placedImages: { [key: number]: string };
+    onRemoveImage: (index: number) => void;
+    onDropImage: (index: number, dataString: string) => void;
+    canvasRef: React.RefObject<any>;
+    gridSettings: { rows: number; cols: number; rowWeights: number[]; colWeights: number[] };
+    onGridSettingChange?: (type: 'row' | 'col', indexOrUpdates: number | { index: number, value: number }[], value?: number) => void;
+    cellImages: { [key: number]: CellImage };
+    onCropChange: (index: number, cropData: any) => void;
+    activeCell: number | null;
+    onSetActiveCell: (index: number | null) => void;
+    cellSpans: { [key: number]: { rowSpan: number; colSpan: number } };
+    onCellSpanChange: (spans: { [key: number]: { rowSpan: number; colSpan: number } }) => void;
+}
+
+export const KonvaCollageCanvas: React.FC<KonvaCollageCanvasProps> = ({
+    template,
+    style,
+    placedImages,
+    onRemoveImage,
+    onDropImage,
+    canvasRef,
+    gridSettings,
+    onGridSettingChange,
+    cellImages,
+    onCropChange,
+    activeCell,
+    onSetActiveCell,
+    cellSpans,
+    onCellSpanChange,
+}) => {
+    const stageRef = useRef<any>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [stageDimensions, setStageDimensions] = useState({ width: 600, height: 600 });
+    const [dragging, setDragging] = useState<{
+        type: 'row' | 'col',
+        index: number,
+        start: number,
+        initialWeight1: number,
+        initialWeight2: number
+    } | null>(null);
+
+    // Handle resize dragging
+    useEffect(() => {
+        if (!dragging || !gridSettings || !onGridSettingChange) return;
+
+        const handleMouseMove = (e: MouseEvent) => {
+            const { type, index, start, initialWeight1, initialWeight2 } = dragging;
+            const deltaPx = type === 'col' ? e.clientX - start : e.clientY - start;
+
+            const totalSize = type === 'col' ? stageDimensions.width - (style.padding * 2) : stageDimensions.height - (style.padding * 2);
+            const totalWeight = type === 'col'
+                ? gridSettings.colWeights.reduce((a, b) => a + b, 0)
+                : gridSettings.rowWeights.reduce((a, b) => a + b, 0);
+
+            const deltaFr = deltaPx * (totalWeight / totalSize);
+
+            const MIN_WEIGHT = 0.05;
+            let newWeight1 = initialWeight1 + deltaFr;
+            let newWeight2 = initialWeight2 - deltaFr;
+
+            if (newWeight1 < MIN_WEIGHT) {
+                newWeight1 = MIN_WEIGHT;
+                newWeight2 = initialWeight1 + initialWeight2 - MIN_WEIGHT;
+            } else if (newWeight2 < MIN_WEIGHT) {
+                newWeight2 = MIN_WEIGHT;
+                newWeight1 = initialWeight1 + initialWeight2 - MIN_WEIGHT;
+            }
+
+            onGridSettingChange(type, [
+                { index: index, value: newWeight1 },
+                { index: index + 1, value: newWeight2 }
+            ]);
+        };
+
+        const handleMouseUp = () => {
+            setDragging(null);
+        };
+
+        window.addEventListener('mousemove', handleMouseMove);
+        window.addEventListener('mouseup', handleMouseUp);
+        return () => {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [dragging, gridSettings, onGridSettingChange, style.padding, stageDimensions]);
+
+    const handleMouseDown = (e: React.MouseEvent, type: 'row' | 'col', index: number) => {
+        e.stopPropagation();
+        e.preventDefault();
+        if (!gridSettings) return;
+
+        const weights = type === 'col' ? gridSettings.colWeights : gridSettings.rowWeights;
+        setDragging({
+            type,
+            index,
+            start: type === 'col' ? e.clientX : e.clientY,
+            initialWeight1: weights[index],
+            initialWeight2: weights[index + 1]
+        });
+    };
+
+    // Drag and drop handlers
+    const handleDrop = (e: React.DragEvent, index: number) => {
+        e.preventDefault();
+        const data = e.dataTransfer.getData('text/plain');
+        onDropImage(index, data);
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+    };
+
+    const handleCellDragStart = (e: React.DragEvent, index: number) => {
+        const data = JSON.stringify({ type: 'cell', index });
+        e.dataTransfer.setData('text/plain', data);
+    };
+
+    // Calculate stage dimensions based on aspect ratio
+    useEffect(() => {
+        const width = 600;
+        const height = style.aspectRatio ? width / style.aspectRatio : 600;
+        setStageDimensions({ width, height });
+    }, [style.aspectRatio]);
+
+    // Expose stage ref to parent for export
+    useEffect(() => {
+        if (canvasRef && stageRef.current) {
+            (canvasRef as any).current = stageRef.current;
+        }
+    }, [canvasRef]);
+
+    // Calculate grid cells with spanning support
+    const calculateGridCells = (): GridCell[] => {
+        const cells: GridCell[] = [];
+        const { rows, cols, rowWeights, colWeights } = gridSettings;
+        const padding = style.padding;
+        const gap = style.gap;
+
+        const totalColWeight = colWeights.reduce((a, b) => a + b, 0);
+        const totalRowWeight = rowWeights.reduce((a, b) => a + b, 0);
+
+        const availableWidth = stageDimensions.width - (padding * 2) - (gap * (cols - 1));
+        const availableHeight = stageDimensions.height - (padding * 2) - (gap * (rows - 1));
+
+        // Track which grid positions are occupied by spanning cells
+        const occupied: boolean[][] = Array(rows).fill(null).map(() => Array(cols).fill(false));
+
+        let cellIndex = 0;
+        for (let row = 0; row < rows; row++) {
+            for (let col = 0; col < cols; col++) {
+                // Skip if this position is already occupied by a spanning cell
+                if (occupied[row][col]) continue;
+
+                if (cellIndex >= template.cells) break;
+
+                // Get span for this cell (default 1x1)
+                const span = cellSpans[cellIndex] || { rowSpan: 1, colSpan: 1 };
+
+                // Mark occupied positions
+                for (let r = row; r < Math.min(row + span.rowSpan, rows); r++) {
+                    for (let c = col; c < Math.min(col + span.colSpan, cols); c++) {
+                        occupied[r][c] = true;
+                    }
+                }
+
+                // Calculate width based on colSpan
+                let cellWidth = 0;
+                for (let c = col; c < Math.min(col + span.colSpan, cols); c++) {
+                    cellWidth += (availableWidth * colWeights[c]) / totalColWeight;
+                    if (c > col) cellWidth += gap;
+                }
+
+                // Calculate height based on rowSpan
+                let cellHeight = 0;
+                for (let r = row; r < Math.min(row + span.rowSpan, rows); r++) {
+                    cellHeight += (availableHeight * rowWeights[r]) / totalRowWeight;
+                    if (r > row) cellHeight += gap;
+                }
+
+                // Calculate x position
+                let x = padding;
+                for (let c = 0; c < col; c++) {
+                    x += (availableWidth * colWeights[c]) / totalColWeight + gap;
+                }
+
+                // Calculate y position
+                let y = padding;
+                for (let r = 0; r < row; r++) {
+                    y += (availableHeight * rowWeights[r]) / totalRowWeight + gap;
+                }
+
+                cells.push({
+                    index: cellIndex,
+                    x,
+                    y,
+                    width: cellWidth,
+                    height: cellHeight,
+                    image: cellImages[cellIndex],
+                });
+
+                cellIndex++;
+            }
+        }
+
+        return cells;
+    };
+
+    const cells = calculateGridCells();
+
+    return (
+        <div className="flex-1 bg-slate-100 flex items-center justify-center p-8 overflow-auto" ref={containerRef}>
+            <div
+                className="relative bg-white shadow-2xl"
+                style={{
+                    width: `${stageDimensions.width}px`,
+                    height: `${stageDimensions.height}px`,
+                }}
+            >
+                <Stage
+                    ref={stageRef}
+                    width={stageDimensions.width}
+                    height={stageDimensions.height}
+                >
+                    <Layer>
+                        {/* Background */}
+                        <Rect
+                            x={0}
+                            y={0}
+                            width={stageDimensions.width}
+                            height={stageDimensions.height}
+                            fill={style.backgroundColor}
+                        />
+
+                        {/* Grid cells */}
+                        {cells.map((cell) => (
+                            <CollageCell
+                                key={cell.index}
+                                cell={cell}
+                                style={style}
+                                isActive={activeCell === cell.index}
+                                onSetActive={() => onSetActiveCell(cell.index)}
+                            />
+                        ))}
+                    </Layer>
+                </Stage>
+
+                {/* Resize Handles Overlay - COMMENTED OUT */}
+                {/* 
+                {gridSettings && onGridSettingChange && (
+                    <div className="absolute inset-0 pointer-events-none">
+                        {gridSettings.colWeights.slice(0, -1).map((_, colIndex) => {
+                            const { rows, cols, colWeights } = gridSettings;
+                            const totalColWeight = colWeights.reduce((a, b) => a + b, 0);
+                            const availableWidth = stageDimensions.width - (style.padding * 2) - (style.gap * (cols - 1));
+
+                            let x = style.padding;
+                            for (let c = 0; c <= colIndex; c++) {
+                                x += (availableWidth * colWeights[c]) / totalColWeight;
+                                if (c < colIndex) x += style.gap;
+                            }
+
+                            return (
+                                <div
+                                    key={`col-handle-${colIndex}`}
+                                    className="resize-handle absolute cursor-col-resize pointer-events-auto hover:bg-indigo-500/50 transition-colors bg-indigo-500/20"
+                                    style={{
+                                        left: `${x}px`,
+                                        top: `${style.padding}px`,
+                                        width: `${style.gap}px`,
+                                        height: `${stageDimensions.height - style.padding * 2}px`,
+                                        zIndex: 30,
+                                    }}
+                                    onMouseDown={(e) => handleMouseDown(e, 'col', colIndex)}
+                                    title="Drag to resize column"
+                                />
+                            );
+                        })}
+
+                        {gridSettings.rowWeights.slice(0, -1).map((_, rowIndex) => {
+                            const { rows, cols, rowWeights } = gridSettings;
+                            const totalRowWeight = rowWeights.reduce((a, b) => a + b, 0);
+                            const availableHeight = stageDimensions.height - (style.padding * 2) - (style.gap * (rows - 1));
+
+                            let y = style.padding;
+                            for (let r = 0; r <= rowIndex; r++) {
+                                y += (availableHeight * rowWeights[r]) / totalRowWeight;
+                                if (r < rowIndex) y += style.gap;
+                            }
+
+                            return (
+                                <div
+                                    key={`row-handle-${rowIndex}`}
+                                    className="resize-handle absolute cursor-row-resize pointer-events-auto hover:bg-indigo-500/50 transition-colors bg-indigo-500/20"
+                                    style={{
+                                        left: `${style.padding}px`,
+                                        top: `${y}px`,
+                                        width: `${stageDimensions.width - style.padding * 2}px`,
+                                        height: `${style.gap}px`,
+                                        zIndex: 30,
+                                    }}
+                                    onMouseDown={(e) => handleMouseDown(e, 'row', rowIndex)}
+                                    title="Drag to resize row"
+                                />
+                            );
+                        })}
+                    </div>
+                )}
+                */}
+
+                {/* Crop UI overlays */}
+                {cells.map((cell) => (
+                    cell.image && activeCell === cell.index && (
+                        <div
+                            key={`crop-${cell.index}`}
+                            className="absolute"
+                            style={{
+                                left: `${cell.x}px`,
+                                top: `${cell.y}px`,
+                                width: `${cell.width}px`,
+                                height: `${cell.height}px`,
+                                pointerEvents: 'auto',
+                                zIndex: 50,
+                            }}
+                        >
+                            <ImageCropper
+                                imageUrl={cell.image.url}
+                                cellWidth={cell.width}
+                                cellHeight={cell.height}
+                                onCropChange={(cropData) => onCropChange(cell.index, cropData)}
+                                onComplete={() => onSetActiveCell(null)}
+                            />
+                        </div>
+                    )
+                ))}
+
+                {/* Drag and Drop Zones */}
+                {cells.map((cell) => (
+                    activeCell !== cell.index && (
+                        <div
+                            key={`drop-zone-${cell.index}`}
+                            className="absolute transition-all"
+                            draggable={!!cell.image}
+                            onDragStart={(e) => cell.image && handleCellDragStart(e, cell.index)}
+                            onDrop={(e) => handleDrop(e, cell.index)}
+                            onDragOver={handleDragOver}
+                            onDragEnter={(e) => {
+                                e.currentTarget.style.outline = '3px dashed #6366f1';
+                                e.currentTarget.style.outlineOffset = '-3px';
+                            }}
+                            onDragLeave={(e) => {
+                                e.currentTarget.style.outline = 'none';
+                            }}
+                            style={{
+                                left: `${cell.x}px`,
+                                top: `${cell.y}px`,
+                                width: `${cell.width}px`,
+                                height: `${cell.height}px`,
+                                pointerEvents: 'auto',
+                                cursor: cell.image ? 'grab' : 'default',
+                                zIndex: 15,
+                            }}
+                        />
+                    )
+                ))}
+
+                {/* Edit/Remove buttons overlay */}
+                {cells.map((cell) => {
+                    const span = cellSpans[cell.index] || { rowSpan: 1, colSpan: 1 };
+
+                    return cell.image && activeCell !== cell.index && (
+                        <div
+                            key={`buttons-${cell.index}`}
+                            className="absolute group"
+                            style={{
+                                left: `${cell.x}px`,
+                                top: `${cell.y}px`,
+                                width: `${cell.width}px`,
+                                height: `${cell.height}px`,
+                                pointerEvents: 'none',
+                                zIndex: 20,
+                            }}
+                        >
+                            {/* Top-right: Edit/Remove buttons */}
+                            <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto">
+                                <button
+                                    onClick={() => onSetActiveCell(cell.index)}
+                                    className="bg-white/90 text-slate-700 p-1.5 rounded-full hover:bg-indigo-100 hover:text-indigo-600 shadow-sm"
+                                    title="Edit/Crop"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                    </svg>
+                                </button>
+                                <button
+                                    onClick={() => onRemoveImage(cell.index)}
+                                    className="bg-white/90 text-slate-700 p-1.5 rounded-full hover:bg-red-100 hover:text-red-600 shadow-sm"
+                                    title="Remove"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                                    </svg>
+                                </button>
+                            </div>
+
+                            {/* Bottom-right: Span controls */}
+                            <div className="absolute bottom-2 right-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto">
+                                {/* Width controls */}
+                                <div className="flex gap-1 bg-white/90 rounded-full p-1 shadow-sm">
+                                    <button
+                                        onClick={() => {
+                                            const newSpans = { ...cellSpans };
+                                            newSpans[cell.index] = { ...span, colSpan: Math.max(1, span.colSpan - 1) };
+                                            onCellSpanChange(newSpans);
+                                        }}
+                                        className="text-slate-700 px-1.5 py-0.5 text-xs hover:bg-slate-100 rounded disabled:opacity-50"
+                                        title="Decrease width"
+                                        disabled={span.colSpan <= 1}
+                                    >
+                                        W-
+                                    </button>
+                                    <span className="text-xs text-slate-600 px-1">{span.colSpan}</span>
+                                    <button
+                                        onClick={() => {
+                                            const newSpans = { ...cellSpans };
+                                            newSpans[cell.index] = { ...span, colSpan: Math.min(gridSettings.cols, span.colSpan + 1) };
+                                            onCellSpanChange(newSpans);
+                                        }}
+                                        className="text-slate-700 px-1.5 py-0.5 text-xs hover:bg-slate-100 rounded disabled:opacity-50"
+                                        title="Increase width"
+                                        disabled={span.colSpan >= gridSettings.cols}
+                                    >
+                                        W+
+                                    </button>
+                                </div>
+                                {/* Height controls */}
+                                <div className="flex gap-1 bg-white/90 rounded-full p-1 shadow-sm">
+                                    <button
+                                        onClick={() => {
+                                            const newSpans = { ...cellSpans };
+                                            newSpans[cell.index] = { ...span, rowSpan: Math.max(1, span.rowSpan - 1) };
+                                            onCellSpanChange(newSpans);
+                                        }}
+                                        className="text-slate-700 px-1.5 py-0.5 text-xs hover:bg-slate-100 rounded disabled:opacity-50"
+                                        title="Decrease height"
+                                        disabled={span.rowSpan <= 1}
+                                    >
+                                        H-
+                                    </button>
+                                    <span className="text-xs text-slate-600 px-1">{span.rowSpan}</span>
+                                    <button
+                                        onClick={() => {
+                                            const newSpans = { ...cellSpans };
+                                            newSpans[cell.index] = { ...span, rowSpan: Math.min(gridSettings.rows, span.rowSpan + 1) };
+                                            onCellSpanChange(newSpans);
+                                        }}
+                                        className="text-slate-700 px-1.5 py-0.5 text-xs hover:bg-slate-100 rounded disabled:opacity-50"
+                                        title="Increase height"
+                                        disabled={span.rowSpan >= gridSettings.rows}
+                                    >
+                                        H+
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+};

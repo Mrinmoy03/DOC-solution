@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { DocumentViewer } from './DocumentViewer';
 import { DocumentEditor } from './DocumentEditor';
@@ -7,6 +8,7 @@ import gsap from 'gsap';
 
 export const Dashboard = () => {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [viewerMode, setViewerMode] = useState<'view' | 'edit' | 'photo' | null>(null);
   const [showConvertModal, setShowConvertModal] = useState(false);
@@ -182,6 +184,24 @@ export const Dashboard = () => {
                 Create Document
               </h3>
               <p className="text-slate-600 text-sm font-medium">Start a blank Word document</p>
+            </div>
+          </div>
+
+          <div
+            className="group relative bg-white/80 backdrop-blur-xl rounded-3xl shadow-xl p-8 cursor-pointer hover:shadow-2xl transition-all duration-300 transform hover:scale-105 border-2 border-slate-100 overflow-hidden"
+            onClick={() => navigate('/collage')}
+          >
+            <div className="absolute inset-0 bg-linear-to-br from-violet-500/0 via-fuchsia-500/0 to-purple-500/0 group-hover:from-violet-500/10 group-hover:via-fuchsia-500/10 group-hover:to-purple-500/10 transition-all duration-300"></div>
+            <div className="relative">
+              <div className="w-16 h-16 bg-linear-to-br from-violet-500 via-purple-500 to-fuchsia-500 rounded-2xl flex items-center justify-center mb-5 shadow-2xl shadow-purple-500/30 group-hover:scale-110 group-hover:rotate-6 transition-all duration-300">
+                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold text-slate-800 mb-2 group-hover:text-purple-600 transition-colors">
+                Photo Collage
+              </h3>
+              <p className="text-slate-600 text-sm font-medium">Create beautiful photo grids</p>
             </div>
           </div>
 
