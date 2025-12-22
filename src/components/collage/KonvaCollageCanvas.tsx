@@ -20,10 +20,11 @@ interface KonvaCollageCanvasProps {
     onSetActiveCell: (index: number | null) => void;
     cellSpans: { [key: number]: { rowSpan: number; colSpan: number } };
     onCellSpanChange: (spans: { [key: number]: { rowSpan: number; colSpan: number } }) => void;
+    cellPositions: { [key: number]: { row: number; col: number; rowSpan: number; colSpan: number } };
+    onCellPositionChange: (positions: { [key: number]: { row: number; col: number; rowSpan: number; colSpan: number } }) => void;
 }
 
 export const KonvaCollageCanvas: React.FC<KonvaCollageCanvasProps> = ({
-    template,
     style,
     placedImages,
     onRemoveImage,
@@ -37,6 +38,8 @@ export const KonvaCollageCanvas: React.FC<KonvaCollageCanvasProps> = ({
     onSetActiveCell,
     cellSpans,
     onCellSpanChange,
+    cellPositions,
+    onCellPositionChange,
 }) => {
     const stageRef = useRef<any>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -48,6 +51,17 @@ export const KonvaCollageCanvas: React.FC<KonvaCollageCanvasProps> = ({
         initialWeight1: number,
         initialWeight2: number
     } | null>(null);
+
+    // State for cell resize dragging
+    const [resizing, setResizing] = useState<{
+        cellIndex: number;
+        edge: 'top' | 'bottom' | 'left' | 'right' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+        startX: number;
+        startY: number;
+        startSpan: { rowSpan: number; colSpan: number };
+        startPosition: { row: number, col: number, rowSpan: number, colSpan: number };
+    } | null>(null);
+
 
     // Handle resize dragging
     useEffect(() => {
@@ -94,6 +108,139 @@ export const KonvaCollageCanvas: React.FC<KonvaCollageCanvasProps> = ({
         };
     }, [dragging, gridSettings, onGridSettingChange, style.padding, stageDimensions]);
 
+    // Handle cell resize dragging - now updates positions for true directional expansion
+    useEffect(() => {
+        if (!resizing) return;
+
+        const handleMouseMove = (e: MouseEvent) => {
+            const { cellIndex, edge, startX, startY, startPosition } = resizing;
+            const deltaX = e.clientX - startX;
+            const deltaY = e.clientY - startY;
+
+            // Calculate how many grid cells to span based on drag distance
+            const cellWidth = stageDimensions.width / gridSettings.cols;
+            const cellHeight = stageDimensions.height / gridSettings.rows;
+
+            // Use START position as base for calculations to avoid infinite loop
+            const currentPos = startPosition;
+            if (!currentPos) return;
+
+            // Check if a proposed span collides with any OTHER cell that has an image
+            const checkCollision = (r: number, c: number, rs: number, cs: number) => {
+                for (const [idxStr, pos] of Object.entries(cellPositions)) {
+                    const idx = parseInt(idxStr);
+                    if (idx === cellIndex) continue; // Skip self
+
+                    // Only check collision with cells that HAVE images
+                    // "Smart expansion": Only blocked by occupied cells
+                    if (!cellImages[idx]) continue;
+
+                    // Check overlap
+                    // Rect A: [c, r] to [c+cs, r+rs]
+                    // Rect B: [pos.col, pos.row] to [pos.col+pos.colSpan, pos.row+pos.rowSpan]
+                    const overlapX = Math.max(0, Math.min(c + cs, pos.col + pos.colSpan) - Math.max(c, pos.col));
+                    const overlapY = Math.max(0, Math.min(r + rs, pos.row + pos.rowSpan) - Math.max(r, pos.row));
+
+                    if (overlapX > 0 && overlapY > 0) return true;
+                }
+                return false;
+            };
+
+            let newRow = currentPos.row;
+            let newCol = currentPos.col;
+            let newRowSpan = currentPos.rowSpan;
+            let newColSpan = currentPos.colSpan;
+
+            // Handle different edges - cascade updates to verify combined moves (like diagonal)
+            if (edge.includes('right')) {
+                const colsToAdd = Math.round(deltaX / cellWidth);
+                const proposedColSpan = Math.max(1, currentPos.colSpan + colsToAdd);
+                // Clamp to grid
+                const maxColSpan = Math.min(proposedColSpan, gridSettings.cols - newCol);
+
+                // Check if this expansion collides (using current vertical state)
+                if (!checkCollision(newRow, newCol, newRowSpan, maxColSpan)) {
+                    newColSpan = maxColSpan;
+                }
+            }
+            if (edge.includes('left')) {
+                const colsToAdd = Math.round(-deltaX / cellWidth);
+                // Expanding left: decrease col, increase colSpan
+                const proposedStartCol = Math.max(0, currentPos.col - colsToAdd);
+
+                if (proposedStartCol !== newCol) {
+                    const proposedColSpan = currentPos.colSpan + (currentPos.col - proposedStartCol);
+                    // Check collision
+                    if (!checkCollision(newRow, proposedStartCol, newRowSpan, proposedColSpan)) {
+                        newCol = proposedStartCol;
+                        newColSpan = proposedColSpan;
+                    }
+                }
+            }
+            if (edge.includes('bottom')) {
+                const rowsToAdd = Math.round(deltaY / cellHeight);
+                const proposedRowSpan = Math.max(1, currentPos.rowSpan + rowsToAdd);
+                const maxRowSpan = Math.min(proposedRowSpan, gridSettings.rows - newRow);
+
+                // Check collision (USING UPDATED newCol/newColSpan from previous blocks)
+                if (!checkCollision(newRow, newCol, maxRowSpan, newColSpan)) {
+                    newRowSpan = maxRowSpan;
+                }
+            }
+            if (edge.includes('top')) {
+                const rowsToAdd = Math.round(-deltaY / cellHeight);
+                // Expanding up: decrease row, increase rowSpan
+                const proposedStartRow = Math.max(0, currentPos.row - rowsToAdd);
+
+                if (proposedStartRow !== newRow) {
+                    const proposedRowSpan = currentPos.rowSpan + (currentPos.row - proposedStartRow);
+                    // Check collision
+                    if (!checkCollision(proposedStartRow, newCol, proposedRowSpan, newColSpan)) {
+                        newRow = proposedStartRow;
+                        newRowSpan = proposedRowSpan;
+                    }
+                }
+            }
+
+            // Update cell position if changed
+            // NOTE: We check against current live cellPositions to avoid redundant updates, 
+            // but the CALCULATION is based on startPosition.
+            const livePos = cellPositions[cellIndex];
+            if (livePos && (newRow !== livePos.row || newCol !== livePos.col ||
+                newRowSpan !== livePos.rowSpan || newColSpan !== livePos.colSpan)) {
+
+                const newPositions = { ...cellPositions };
+                newPositions[cellIndex] = {
+                    row: newRow,
+                    col: newCol,
+                    rowSpan: Math.max(1, newRowSpan),
+                    colSpan: Math.max(1, newColSpan),
+                };
+                onCellPositionChange(newPositions);
+
+                // Also update cellSpans for backward compatibility
+                const newSpans = { ...cellSpans };
+                newSpans[cellIndex] = {
+                    rowSpan: Math.max(1, newRowSpan),
+                    colSpan: Math.max(1, newColSpan)
+                };
+                onCellSpanChange(newSpans);
+            }
+        };
+
+        const handleMouseUp = () => {
+            setResizing(null);
+        };
+
+        window.addEventListener('mousemove', handleMouseMove);
+        window.addEventListener('mouseup', handleMouseUp);
+        return () => {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [resizing, gridSettings, cellPositions, cellSpans, onCellPositionChange, onCellSpanChange, stageDimensions]);
+
+
     const handleMouseDown = (e: React.MouseEvent, type: 'row' | 'col', index: number) => {
         e.stopPropagation();
         e.preventDefault();
@@ -139,7 +286,7 @@ export const KonvaCollageCanvas: React.FC<KonvaCollageCanvasProps> = ({
         }
     }, [canvasRef]);
 
-    // Calculate grid cells with spanning support
+    // Calculate grid cells using explicit positions
     const calculateGridCells = (): GridCell[] => {
         const cells: GridCell[] = [];
         const { rows, cols, rowWeights, colWeights } = gridSettings;
@@ -152,67 +299,74 @@ export const KonvaCollageCanvas: React.FC<KonvaCollageCanvasProps> = ({
         const availableWidth = stageDimensions.width - (padding * 2) - (gap * (cols - 1));
         const availableHeight = stageDimensions.height - (padding * 2) - (gap * (rows - 1));
 
-        // Track which grid positions are occupied by spanning cells
-        const occupied: boolean[][] = Array(rows).fill(null).map(() => Array(cols).fill(false));
+        // Iterate through cellPositions instead of sequential grid
+        Object.entries(cellPositions).forEach(([indexStr, position]) => {
+            const cellIndex = parseInt(indexStr);
+            const { row, col, rowSpan, colSpan } = position;
 
-        let cellIndex = 0;
-        for (let row = 0; row < rows; row++) {
-            for (let col = 0; col < cols; col++) {
-                // Skip if this position is already occupied by a spanning cell
-                if (occupied[row][col]) continue;
+            // Occlusion Check: If this cell has NO image, check if it is covered by a cell WITH an image
+            if (!cellImages[cellIndex]) {
+                let isObscured = false;
+                for (const [otherIndexStr, otherPos] of Object.entries(cellPositions)) {
+                    const otherIndex = parseInt(otherIndexStr);
+                    if (otherIndex === cellIndex) continue;
 
-                if (cellIndex >= template.cells) break;
+                    // Only care if the *other* cell has an image (so it's opaque)
+                    if (cellImages[otherIndex]) {
+                        // Check intersection
+                        const overlapX = Math.max(0, Math.min(col + colSpan, otherPos.col + otherPos.colSpan) - Math.max(col, otherPos.col));
+                        const overlapY = Math.max(0, Math.min(row + rowSpan, otherPos.row + otherPos.rowSpan) - Math.max(row, otherPos.row));
 
-                // Get span for this cell (default 1x1)
-                const span = cellSpans[cellIndex] || { rowSpan: 1, colSpan: 1 };
-
-                // Mark occupied positions
-                for (let r = row; r < Math.min(row + span.rowSpan, rows); r++) {
-                    for (let c = col; c < Math.min(col + span.colSpan, cols); c++) {
-                        occupied[r][c] = true;
+                        // If obscured (even partially, but let's assume significant overlap or containment?)
+                        // For "clean" grid, usually full containment or identity. 
+                        // Let's assume ANY overlap by an Image Cell should hide the Empty Cell to prevent z-fighting/blocking.
+                        if (overlapX > 0 && overlapY > 0) {
+                            isObscured = true;
+                            break;
+                        }
                     }
                 }
-
-                // Calculate width based on colSpan
-                let cellWidth = 0;
-                for (let c = col; c < Math.min(col + span.colSpan, cols); c++) {
-                    cellWidth += (availableWidth * colWeights[c]) / totalColWeight;
-                    if (c > col) cellWidth += gap;
-                }
-
-                // Calculate height based on rowSpan
-                let cellHeight = 0;
-                for (let r = row; r < Math.min(row + span.rowSpan, rows); r++) {
-                    cellHeight += (availableHeight * rowWeights[r]) / totalRowWeight;
-                    if (r > row) cellHeight += gap;
-                }
-
-                // Calculate x position
-                let x = padding;
-                for (let c = 0; c < col; c++) {
-                    x += (availableWidth * colWeights[c]) / totalColWeight + gap;
-                }
-
-                // Calculate y position
-                let y = padding;
-                for (let r = 0; r < row; r++) {
-                    y += (availableHeight * rowWeights[r]) / totalRowWeight + gap;
-                }
-
-                cells.push({
-                    index: cellIndex,
-                    x,
-                    y,
-                    width: cellWidth,
-                    height: cellHeight,
-                    image: cellImages[cellIndex],
-                });
-
-                cellIndex++;
+                if (isObscured) return; // Skip adding this cell (it's hidden)
             }
-        }
 
-        return cells;
+            // Calculate width based on colSpan
+            let cellWidth = 0;
+            for (let c = col; c < Math.min(col + colSpan, cols); c++) {
+                cellWidth += (availableWidth * colWeights[c]) / totalColWeight;
+                if (c > col) cellWidth += gap;
+            }
+
+            // Calculate height based on rowSpan
+            let cellHeight = 0;
+            for (let r = row; r < Math.min(row + rowSpan, rows); r++) {
+                cellHeight += (availableHeight * rowWeights[r]) / totalRowWeight;
+                if (r > row) cellHeight += gap;
+            }
+
+            // Calculate x position
+            let x = padding;
+            for (let c = 0; c < col; c++) {
+                x += (availableWidth * colWeights[c]) / totalColWeight + gap;
+            }
+
+            // Calculate y position
+            let y = padding;
+            for (let r = 0; r < row; r++) {
+                y += (availableHeight * rowWeights[r]) / totalRowWeight + gap;
+            }
+
+            cells.push({
+                index: cellIndex,
+                x,
+                y,
+                width: cellWidth,
+                height: cellHeight,
+                image: cellImages[cellIndex],
+            });
+        });
+
+        // Sort cells by index to maintain consistent rendering order
+        return cells.sort((a, b) => a.index - b.index);
     };
 
     const cells = calculateGridCells();
@@ -473,6 +627,153 @@ export const KonvaCollageCanvas: React.FC<KonvaCollageCanvasProps> = ({
                                     </button>
                                 </div>
                             </div>
+
+                            {/* Draggable Resize Handles */}
+                            {/* Right edge */}
+                            <div
+                                className="absolute top-0 right-0 w-1 h-full cursor-ew-resize pointer-events-auto hover:bg-indigo-500/50 active:bg-indigo-600 transition-colors"
+                                style={{ transform: 'translateX(50%)' }}
+                                title="Drag to resize width →"
+                                onMouseDown={(e) => {
+                                    e.stopPropagation();
+                                    const span = cellSpans[cell.index] || { rowSpan: 1, colSpan: 1 };
+                                    setResizing({
+                                        cellIndex: cell.index,
+                                        edge: 'right',
+                                        startX: e.clientX,
+                                        startY: e.clientY,
+                                        startSpan: span,
+                                        startPosition: cellPositions[cell.index],
+                                    });
+                                }}
+                            />
+
+                            {/* Left edge */}
+                            <div
+                                className="absolute top-0 left-0 w-1 h-full cursor-ew-resize pointer-events-auto hover:bg-indigo-500/50 active:bg-indigo-600 transition-colors"
+                                style={{ transform: 'translateX(-50%)' }}
+                                title="Drag to resize width ←"
+                                onMouseDown={(e) => {
+                                    e.stopPropagation();
+                                    const span = cellSpans[cell.index] || { rowSpan: 1, colSpan: 1 };
+                                    setResizing({
+                                        cellIndex: cell.index,
+                                        edge: 'left',
+                                        startX: e.clientX,
+                                        startY: e.clientY,
+                                        startSpan: span,
+                                        startPosition: cellPositions[cell.index],
+                                    });
+                                }}
+                            />
+
+                            {/* Bottom edge */}
+                            <div
+                                className="absolute bottom-0 left-0 w-full h-1 cursor-ns-resize pointer-events-auto hover:bg-indigo-500/50 active:bg-indigo-600 transition-colors"
+                                style={{ transform: 'translateY(50%)' }}
+                                title="Drag to resize height ↓"
+                                onMouseDown={(e) => {
+                                    e.stopPropagation();
+                                    const span = cellSpans[cell.index] || { rowSpan: 1, colSpan: 1 };
+                                    setResizing({
+                                        cellIndex: cell.index,
+                                        edge: 'bottom',
+                                        startX: e.clientX,
+                                        startY: e.clientY,
+                                        startSpan: span,
+                                        startPosition: cellPositions[cell.index],
+                                    });
+                                }}
+                            />
+
+                            {/* Top edge */}
+                            <div
+                                className="absolute top-0 left-0 w-full h-1 cursor-ns-resize pointer-events-auto hover:bg-indigo-500/50 active:bg-indigo-600 transition-colors"
+                                style={{ transform: 'translateY(-50%)' }}
+                                title="Drag to resize height ↑"
+                                onMouseDown={(e) => {
+                                    e.stopPropagation();
+                                    const span = cellSpans[cell.index] || { rowSpan: 1, colSpan: 1 };
+                                    setResizing({
+                                        cellIndex: cell.index,
+                                        edge: 'top',
+                                        startX: e.clientX,
+                                        startY: e.clientY,
+                                        startSpan: span,
+                                        startPosition: cellPositions[cell.index],
+                                    });
+                                }}
+                            />
+
+                            {/* Corner handles - more visible */}
+                            <div
+                                className="absolute top-0 right-0 w-4 h-4 cursor-nesw-resize pointer-events-auto bg-indigo-500/70 hover:bg-indigo-600 rounded-full transition-all shadow-sm"
+                                style={{ transform: 'translate(50%, -50%)' }}
+                                title="Drag to resize corner ↗"
+                                onMouseDown={(e) => {
+                                    e.stopPropagation();
+                                    const span = cellSpans[cell.index] || { rowSpan: 1, colSpan: 1 };
+                                    setResizing({
+                                        cellIndex: cell.index,
+                                        edge: 'top-right',
+                                        startX: e.clientX,
+                                        startY: e.clientY,
+                                        startSpan: span,
+                                        startPosition: cellPositions[cell.index],
+                                    });
+                                }}
+                            />
+                            <div
+                                className="absolute top-0 left-0 w-4 h-4 cursor-nwse-resize pointer-events-auto bg-indigo-500/70 hover:bg-indigo-600 rounded-full transition-all shadow-sm"
+                                style={{ transform: 'translate(-50%, -50%)' }}
+                                title="Drag to resize corner ↖"
+                                onMouseDown={(e) => {
+                                    e.stopPropagation();
+                                    const span = cellSpans[cell.index] || { rowSpan: 1, colSpan: 1 };
+                                    setResizing({
+                                        cellIndex: cell.index,
+                                        edge: 'top-left',
+                                        startX: e.clientX,
+                                        startY: e.clientY,
+                                        startSpan: span,
+                                        startPosition: cellPositions[cell.index],
+                                    });
+                                }}
+                            />
+                            <div
+                                className="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize pointer-events-auto bg-indigo-500/70 hover:bg-indigo-600 rounded-full transition-all shadow-sm"
+                                style={{ transform: 'translate(50%, 50%)' }}
+                                title="Drag to resize corner ↘"
+                                onMouseDown={(e) => {
+                                    e.stopPropagation();
+                                    const span = cellSpans[cell.index] || { rowSpan: 1, colSpan: 1 };
+                                    setResizing({
+                                        cellIndex: cell.index,
+                                        edge: 'bottom-right',
+                                        startX: e.clientX,
+                                        startY: e.clientY,
+                                        startSpan: span,
+                                        startPosition: cellPositions[cell.index],
+                                    });
+                                }}
+                            />
+                            <div
+                                className="absolute bottom-0 left-0 w-4 h-4 cursor-nesw-resize pointer-events-auto bg-indigo-500/70 hover:bg-indigo-600 rounded-full transition-all shadow-sm"
+                                style={{ transform: 'translate(-50%, 50%)' }}
+                                title="Drag to resize corner ↙"
+                                onMouseDown={(e) => {
+                                    e.stopPropagation();
+                                    const span = cellSpans[cell.index] || { rowSpan: 1, colSpan: 1 };
+                                    setResizing({
+                                        cellIndex: cell.index,
+                                        edge: 'bottom-left',
+                                        startX: e.clientX,
+                                        startY: e.clientY,
+                                        startSpan: span,
+                                        startPosition: cellPositions[cell.index],
+                                    });
+                                }}
+                            />
                         </div>
                     );
                 })}

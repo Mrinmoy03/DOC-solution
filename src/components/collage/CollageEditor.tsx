@@ -47,6 +47,7 @@ export const CollageEditor: React.FC = () => {
     const [activeCell, setActiveCell] = useState<number | null>(null);
     const [gridSettings, setGridSettings] = useState<GridSettings>({ rows: 2, cols: 2, rowWeights: [1, 1], colWeights: [1, 1] });
     const [cellSpans, setCellSpans] = useState<{ [key: number]: { rowSpan: number; colSpan: number } }>({});
+    const [cellPositions, setCellPositions] = useState<{ [key: number]: { row: number; col: number; rowSpan: number; colSpan: number } }>({});
     const canvasRef = useRef<any>(null);
 
     React.useEffect(() => {
@@ -77,6 +78,47 @@ export const CollageEditor: React.FC = () => {
             colWeights: new Array(cols).fill(1)
         });
     }, [selectedTemplate]);
+
+    // Initialize cellPositions from sequential layout (resets on grid/template change)
+    React.useEffect(() => {
+        const { rows, cols } = gridSettings;
+        const totalCells = selectedTemplate.cells;
+        const newPositions: { [key: number]: { row: number; col: number; rowSpan: number; colSpan: number } } = {};
+
+        // Track occupied positions
+        const occupied: boolean[][] = Array(rows).fill(null).map(() => Array(cols).fill(false));
+
+        let cellIndex = 0;
+        for (let row = 0; row < rows; row++) {
+            for (let col = 0; col < cols; col++) {
+                if (occupied[row][col]) continue;
+                if (cellIndex >= totalCells) break;
+
+                // Always start with 1x1 cells on grid change
+                const span = { rowSpan: 1, colSpan: 1 };
+
+                // Mark occupied positions
+                for (let r = row; r < Math.min(row + span.rowSpan, rows); r++) {
+                    for (let c = col; c < Math.min(col + span.colSpan, cols); c++) {
+                        occupied[r][c] = true;
+                    }
+                }
+
+                newPositions[cellIndex] = {
+                    row,
+                    col,
+                    rowSpan: span.rowSpan,
+                    colSpan: span.colSpan,
+                };
+
+                cellIndex++;
+            }
+        }
+
+        setCellPositions(newPositions);
+        // Also reset cellSpans to prevent stale spans from affecting the new layout
+        setCellSpans({});
+    }, [gridSettings.rows, gridSettings.cols, selectedTemplate.cells]);
 
     // Sync cellImages with placedImages
     React.useEffect(() => {
@@ -369,6 +411,8 @@ export const CollageEditor: React.FC = () => {
                     onSetActiveCell={setActiveCell}
                     cellSpans={cellSpans}
                     onCellSpanChange={setCellSpans}
+                    cellPositions={cellPositions}
+                    onCellPositionChange={setCellPositions}
                 />
             </div>
         </div>
